@@ -31,13 +31,18 @@ export default function Home() {
 
   const loadGameData = async (userId: string) => {
     try {
+      console.log('Loading game data for user:', userId);
+      
       // Load guild
       const guilds = await blink.db.guilds.list({
-        where: { user_id: userId },
+        where: { userId: userId }, // Use camelCase for Blink SDK
         limit: 1
       });
 
+      console.log('Found guilds:', guilds);
+
       if (guilds.length === 0) {
+        console.log('No guild found, creating initial guild');
         // Create initial guild
         await createInitialGuild(userId);
         return;
@@ -45,43 +50,60 @@ export default function Home() {
 
       const userGuild = guilds[0];
       setGuild(userGuild);
+      console.log('Guild loaded:', userGuild);
 
       // Load characters
       const guildCharacters = await blink.db.characters.list({
-        where: { guild_id: userGuild.id },
+        where: { guildId: userGuild.id }, // Use camelCase for Blink SDK
         orderBy: { level: 'desc' },
         limit: 6
       });
+      
+      console.log('Characters loaded:', guildCharacters);
       setCharacters(guildCharacters);
+      setLoading(false); // Make sure to stop loading when done
     } catch (error) {
       console.error('Error loading game data:', error);
+      setLoading(false); // Stop loading on error
+      Alert.alert(
+        'Loading Error',
+        `Failed to load game data: ${error.message || 'Unknown error'}. Please try refreshing the app.`,
+        [
+          { text: 'Retry', onPress: () => loadGameData(userId) },
+          { text: 'Cancel' }
+        ]
+      );
     }
   };
 
   const createInitialGuild = async (userId: string) => {
     try {
+      console.log('Creating initial guild for user:', userId);
       const guildId = `guild_${Date.now()}`;
       
+      console.log('Creating guild with ID:', guildId);
       // Create guild
       const newGuild = await blink.db.guilds.create({
         id: guildId,
-        user_id: userId,
+        userId: userId, // Use camelCase for Blink SDK
         name: 'Shadow Guardians',
         description: 'A new guild ready for adventure',
         level: 1,
         experience: 0,
         gold: 1000,
         gems: 50,
-        territory_count: 0,
-        member_count: 1
+        territoryCount: 0,
+        memberCount: 1
       });
+
+      console.log('Guild created successfully:', newGuild);
 
       // Create starter characters
       const starterCharacters = [
         {
           id: `char_${Date.now()}_1`,
-          user_id: userId,
-          guild_id: guildId,
+          userId: userId, // Use camelCase for Blink SDK
+          guildId: guildId,
           name: 'Aria',
           class: 'warrior' as const,
           level: 1,
@@ -91,12 +113,12 @@ export default function Home() {
           defense: 20,
           speed: 12,
           rarity: 'common' as const,
-          is_equipped: 1
+          isEquipped: 1 // Use camelCase for Blink SDK
         },
         {
           id: `char_${Date.now()}_2`,
-          user_id: userId,
-          guild_id: guildId,
+          userId: userId, // Use camelCase for Blink SDK
+          guildId: guildId,
           name: 'Zephyr',
           class: 'mage' as const,
           level: 1,
@@ -106,17 +128,28 @@ export default function Home() {
           defense: 10,
           speed: 15,
           rarity: 'rare' as const,
-          is_equipped: 1
+          isEquipped: 1 // Use camelCase for Blink SDK
         }
       ];
 
+      console.log('Creating starter characters:', starterCharacters);
       await blink.db.characters.createMany(starterCharacters);
+      console.log('Characters created successfully');
 
       setGuild(newGuild);
       setCharacters(starterCharacters);
+      console.log('Initial guild setup completed');
     } catch (error) {
       console.error('Error creating initial guild:', error);
-      Alert.alert('Error', 'Failed to create your guild. Please try again.');
+      setLoading(false); // Make sure to stop loading on error
+      Alert.alert(
+        'Setup Error', 
+        `Failed to create your guild: ${error.message || 'Unknown error'}. Please try refreshing the app.`,
+        [
+          { text: 'Retry', onPress: () => createInitialGuild(userId) },
+          { text: 'Cancel' }
+        ]
+      );
     }
   };
 
@@ -187,6 +220,15 @@ export default function Home() {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>Setting up your guild...</Text>
+        <Text style={styles.debugText}>User ID: {user?.id}</Text>
+        <Text style={styles.debugText}>Loading: {loading.toString()}</Text>
+        <Button
+          title="Force Retry Setup"
+          onPress={() => user?.id && loadGameData(user.id)}
+          variant="outline"
+          style={{ marginTop: 20 }}
+        />
+        <AuthDebug />
       </View>
     );
   }
@@ -282,6 +324,13 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 18,
     textAlign: 'center',
+  },
+  debugText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 8,
+    fontFamily: 'monospace',
   },
   header: {
     padding: 20,
